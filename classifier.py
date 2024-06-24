@@ -84,7 +84,7 @@ class ViolenceClassifier(pl.LightningModule):
         self.log('test_accuracy', accuracy, prog_bar=True)
         return loss
 
-    def test(self):
+    def classify(self,input_tensor):
         gpu_id = [0]
         lr = 3e-4
         batch_size = 128
@@ -107,48 +107,7 @@ class ViolenceClassifier(pl.LightningModule):
         logger = TensorBoardLogger("train_logs", name=log_name)
         # 实例化训练器
         trainer = Trainer(
-            max_epochs=20,
-            accelerator='gpu',
-            logger=logger,
-            callbacks=[checkpoint_callback]
-        )
-        # 加载数据
-        train_loader = data_module.train_dataloader()
-        val_loader = data_module.val_dataloader()
-        test_loader = data_module.test_dataloader()
-        ckpt_path = "train_logs/resnet18_pretrain_test/version_18/checkpoints/resnet18_pretrain_test-epoch=179-val_loss=0" \
-                    ".00.ckpt"
-        # 这里是之前自己训练产生的一个节点，如果需要可以自己先运行train函数再改用其他测试集合
-        model = ViolenceClassifier.load_from_checkpoint(ckpt_path)
-        trainer = Trainer(accelerator='gpu', devices=gpu_id)
-        trainer.test(model, test_loader)
-        return model;
-
-    def train_model(self):
-        # 设置训练参数
-        gpu_id = [0]
-        lr = 3e-4
-        batch_size = 128
-        log_name = "resnet18_pretrain_test"
-        print("{} gpu: {}, batch size: {}, lr: {}".format(log_name, gpu_id, batch_size, lr))
-        # 创建数据模块
-        data_module = CustomDataModule(batch_size=128)
-        # 设置数据模块
-        data_module.setup()
-        # 创建模型
-        model = ViolenceClassifier(lr=3e-4)
-        # 实例化 ModelCheckpoint 回调以保存最佳模型
-        checkpoint_callback = ModelCheckpoint(
-            monitor='val_loss',
-            filename=log_name + '-{epoch:02d}-{val_loss:.2f}',
-            save_top_k=1,
-            mode='min',
-        )
-        # 实例化 TensorBoardLogger 用于记录日志
-        logger = TensorBoardLogger("train_logs", name=log_name)
-        # 实例化训练器
-        trainer = Trainer(
-            max_epochs=4,
+            max_epochs=100,
             accelerator='gpu',
             logger=logger,
             callbacks=[checkpoint_callback]
@@ -158,11 +117,29 @@ class ViolenceClassifier(pl.LightningModule):
         val_loader = data_module.val_dataloader()
         test_loader = data_module.test_dataloader()
         trainer.fit(model, train_loader)
-        return model;
-
-    def classify(self, model, input_tensor):
         model.eval()  # 将模型设置为评估模式
         with torch.no_grad():
+            outputs = model(input_tensor)
+            _, predicted = torch.max(outputs, 1)
+            return predicted.tolist()
+
+    def classify1(self, input_tensor):
+        ckpt_path = "train_logs/resnet18_pretrain_test/version_3/checkpoints/resnet18_pretrain_test-epoch=69-val_loss=0.00.ckpt"
+
+        # 从检查点加载模型
+        model = ViolenceClassifier.load_from_checkpoint(ckpt_path)
+
+        # 确保模型处于评估模式
+        model.eval()
+
+        # 如果有 GPU 可用，将模型和输入张量移动到 GPU
+        if torch.cuda.is_available():
+            model = model.cuda()
+            input_tensor = input_tensor.cuda()
+
+        # 禁用梯度计算进行推理
+        with torch.no_grad():
+            # 获取预测结果
             outputs = model(input_tensor)
             _, predicted = torch.max(outputs, 1)
             return predicted.tolist()
