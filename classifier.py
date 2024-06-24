@@ -107,7 +107,7 @@ class ViolenceClassifier(pl.LightningModule):
         logger = TensorBoardLogger("train_logs", name=log_name)
         # 实例化训练器
         trainer = Trainer(
-            max_epochs=100,
+            max_epochs=20,
             accelerator='gpu',
             logger=logger,
             callbacks=[checkpoint_callback]
